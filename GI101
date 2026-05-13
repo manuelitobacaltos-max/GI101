@@ -1,0 +1,712 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goods Issuance Workflow | Vienovo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <style>
+        :root {
+            --vno-primary: #1a73e8;
+            --vno-accent: #0b5394;
+            --vno-success: #198754;
+            --vno-warning: #f59f00;
+            --vno-bg: #eef2f7;
+        }
+        body {
+            background: linear-gradient(135deg, #eef2f7 0%, #e3ebf6 100%);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            min-height: 100vh;
+        }
+        .brand-header {
+            background: linear-gradient(90deg, var(--vno-accent), var(--vno-primary));
+            color: white;
+            padding: 18px 24px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .brand-header h3 { margin: 0; font-weight: 700; letter-spacing: 0.5px; }
+        .brand-header small { opacity: 0.9; }
+        .form-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+        .section-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--vno-accent);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--vno-primary);
+            padding-left: 8px;
+        }
+        .workflow-strip {
+            display: flex;
+            justify-content: space-between;
+            background: #f6f9fc;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 0.78rem;
+        }
+        .workflow-step {
+            flex: 1;
+            text-align: center;
+            color: #6c757d;
+            position: relative;
+        }
+        .workflow-step .step-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: #dee2e6;
+            color: white;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .workflow-step.active .step-num { background: var(--vno-primary); }
+        .workflow-step.done .step-num { background: var(--vno-success); }
+        .workflow-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 14px; right: -50%;
+            width: 100%; height: 2px;
+            background: #dee2e6;
+            z-index: 0;
+        }
+        .ref-badge {
+            background: #fff3cd;
+            border: 1px dashed #f59f00;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-family: 'Courier New', monospace;
+            color: #8a6d3b;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+        table.items-table { font-size: 0.88rem; }
+        table.items-table thead { background: #f6f9fc; }
+        .btn-add-row {
+            background: #e3f2fd; color: var(--vno-primary);
+            border: 1px dashed var(--vno-primary);
+        }
+        .btn-add-row:hover { background: #d0e7fa; }
+        .footer-note {
+            font-size: 0.75rem; color: #6c757d;
+            text-align: center; margin-top: 15px;
+        }
+        #preview-modal pre {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 0.82rem;
+            white-space: pre-wrap;
+            max-height: 360px; overflow-y: auto;
+        }
+        .badge-dept { font-size: 0.7rem; }
+        .draft-indicator {
+            position: fixed; bottom: 15px; right: 15px;
+            background: white; padding: 8px 14px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            font-size: 0.8rem;
+            display: none;
+        }
+        @media print {
+            .no-print, .brand-header, .workflow-strip { display: none !important; }
+            body { background: white; }
+            .form-card { box-shadow: none; border: 1px solid #ccc; }
+        }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="form-card">
+                <!-- HEADER -->
+                <div class="brand-header">
+                    <div>
+                        <h3><i class="bi bi-box-seam"></i> Goods Issuance Workflow</h3>
+                        <small>Vienovo Philippines &middot; Material Request System</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="ref-badge" id="refNumber">GIS-LOADING...</div>
+                        <small class="d-block mt-1" id="dateNow"></small>
+                    </div>
+                </div>
+
+                <div class="p-4 p-md-5">
+                    <!-- WORKFLOW STRIP -->
+                    <div class="workflow-strip">
+                        <div class="workflow-step active" id="wf-1">
+                            <div class="step-num">1</div>
+                            <div><strong>Draft</strong><br>Requestor fills form</div>
+                        </div>
+                        <div class="workflow-step" id="wf-2">
+                            <div class="step-num">2</div>
+                            <div><strong>Approval</strong><br>Manager review</div>
+                        </div>
+                        <div class="workflow-step" id="wf-3">
+                            <div class="step-num">3</div>
+                            <div><strong>Issuance</strong><br>Warehouse</div>
+                        </div>
+                        <div class="workflow-step" id="wf-4">
+                            <div class="step-num">4</div>
+                            <div><strong>Completed</strong><br>Logged in SAP</div>
+                        </div>
+                    </div>
+
+                    <form id="gisForm">
+                        <!-- REQUESTOR -->
+                        <div class="mb-4">
+                            <label class="section-title"><i class="bi bi-person-badge"></i> Requestor Information</label>
+                            <div class="row g-2">
+                                <div class="col-md-7">
+                                    <label class="form-label small mb-1">Employee Name</label>
+                                    <select id="employeeList" class="form-select" required>
+                                        <option value="" disabled selected>-- Search/Select Employee --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small mb-1">Email Address</label>
+                                    <input type="email" id="empEmail" class="form-control" placeholder="auto-filled / editable" required>
+                                </div>
+                                <div class="col-md-5 mt-2">
+                                    <label class="form-label small mb-1">Department</label>
+                                    <input type="text" id="empDept" class="form-control" readonly>
+                                </div>
+                                <div class="col-md-4 mt-2">
+                                    <label class="form-label small mb-1">Plant / Location</label>
+                                    <input type="text" id="empLoc" class="form-control" readonly>
+                                </div>
+                                <div class="col-md-3 mt-2">
+                                    <label class="form-label small mb-1">Date Needed</label>
+                                    <input type="date" id="dateNeeded" class="form-control" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ITEMS -->
+                        <div class="mb-4">
+                            <label class="section-title"><i class="bi bi-list-check"></i> Items Requested</label>
+                            <div class="table-responsive">
+                                <table class="table table-bordered items-table align-middle" id="itemsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:35%">Material / Item</th>
+                                            <th style="width:15%">Category</th>
+                                            <th style="width:12%">Quantity</th>
+                                            <th style="width:10%">UoM</th>
+                                            <th style="width:23%">Purpose</th>
+                                            <th style="width:5%" class="no-print"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="itemsBody">
+                                        <!-- rows injected here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-add-row no-print" id="btnAddRow">
+                                <i class="bi bi-plus-circle"></i> Add Another Item
+                            </button>
+                        </div>
+
+                        <!-- APPROVAL -->
+                        <div class="mb-4">
+                            <label class="section-title"><i class="bi bi-shield-check"></i> Approval Routing</label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label small mb-1">Approving Manager</label>
+                                    <select id="approverList" class="form-select" required>
+                                        <option value="" disabled selected>-- Select Manager --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small mb-1">Cc / Notify (optional)</label>
+                                    <input type="text" id="ccEmail" class="form-control" placeholder="e.g. warehouse@vienovo.ph; finance@vienovo.ph">
+                                </div>
+                            </div>
+                            <div class="alert alert-info mt-2 mb-0 py-2 small" id="routingHint" style="display:none;">
+                                <i class="bi bi-info-circle"></i> <span id="routingText"></span>
+                            </div>
+                        </div>
+
+                        <!-- JUSTIFICATION -->
+                        <div class="mb-4">
+                            <label class="section-title"><i class="bi bi-chat-left-text"></i> Justification</label>
+                            <textarea id="explanation" class="form-control" rows="3"
+                                placeholder="State the business reason / project / SAP reference for this issuance..." required></textarea>
+                        </div>
+
+                        <!-- ACTIONS -->
+                        <div class="d-flex gap-2 flex-wrap no-print">
+                            <button type="button" class="btn btn-outline-secondary" id="btnPreview">
+                                <i class="bi bi-eye"></i> Preview Email
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="btnSaveDraft">
+                                <i class="bi bi-save"></i> Save Draft
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.print()">
+                                <i class="bi bi-printer"></i> Print
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" id="btnClear">
+                                <i class="bi bi-trash"></i> Clear
+                            </button>
+                            <button type="submit" class="btn btn-primary flex-grow-1" id="btnSubmit">
+                                <i class="bi bi-send-check"></i> Send Request for Approval
+                            </button>
+                        </div>
+
+                        <div id="statusMsg" class="mt-3" style="display:none;"></div>
+                    </form>
+
+                    <div class="footer-note">
+                        <i class="bi bi-lock"></i> All submissions are logged. Frontend prototype &mdash; pending SAP B1 / OITM integration.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div class="modal fade" id="preview-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-envelope"></i> Email Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>To:</strong> <span id="pv-to"></span></p>
+                <p><strong>Cc:</strong> <span id="pv-cc"></span></p>
+                <p><strong>Subject:</strong> <span id="pv-subj"></span></p>
+                <hr>
+                <pre id="pv-body"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="draft-indicator" id="draftIndicator">
+    <i class="bi bi-check-circle text-success"></i> Draft saved
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// =========================================================
+// EMPLOYEE MASTER DATA (from list of employee.csv)
+// Format: [Last, First, Dept, Location, Position]
+// =========================================================
+const EMPLOYEES = [
+    ["Abadilla","Charo Mae","Controlling Department","Makati","Chief Finance Controller"],
+    ["Abarquez","Ella","Controlling Department","CEBU","Credit and Collection Supervisor"],
+    ["Agocejos","Johnrey","Sales All Employees","VISAYAS","Technical Sales Representative"],
+    ["Agon","Jiame","Sales All Employees","VISAYAS","District Sales Manager"],
+    ["Alfante","Jonel","Credit and Collection","CEBU","Messenger"],
+    ["Alo","Lawrence Anthony","Sales All Employees","VISAYAS","District Sales Manager"],
+    ["Angeles","Froilan","Production Management","BULACAN","Assistant Plant Manager"],
+    ["Bacani","Alberto Jr.","Credit and Collection","BULACAN","Collector/Messenger"],
+    ["Badilla","Ernesto Jr.","Sales All Employees","MINDANAO","District Sales Manager"],
+    ["Basale","Cris Dean","Logistics","Argao Plant","SAP/Logistics Coordinator"],
+    ["Bautista","Josef Eirone","Sales All Employees","VISAYAS","District Sales Manager"],
+    ["Bitoon","Eric","Production Direct Labor","BULACAN","Sewer"],
+    ["Bolotano","Daniel","Sales All Employees","MINDANAO","District Sales Manager"],
+    ["Bucio","Ericson","Quality Assurance","BUKIDNON PLANT","Quality Assurance Inspector"],
+    ["Buenaventura","Edfrey","Sales All Employees","LUZON","Regional Sales Manager"],
+    ["Camasura","Jojie","Sales All Employees","MINDANAO","Technical Sales Representative"],
+    ["Cardenas","KC Lyn","Customer Service Department","BACOLOD","Customer Service Specialist"],
+    ["Castro Jr.","Jesus","Warehouse","BULACAN","Forklift Operator"],
+    ["Cajegas","Clienth","Human Resources","BUKIDNON PLANT","HR Generalist"],
+    ["Catingub","Arnel","Sales All Employees","MINDANAO","District Sales Manager"],
+    ["Cinco","Efren","Sales All Employees","VISAYAS","Technical Sales Representative"],
+    ["Comendador","Jacob","Sales All Employees","LUZON","District Sales Manager"],
+    ["Corpus","Jerome","Information Technology","Makati","IT Officer"],
+    ["Dablio","Edilyn","Logistics","BUKIDNON PLANT","SAP/Logistics Coordinator"],
+    ["Dabu","Reggie","Information Technology","Makati","IT Manager"],
+    ["Dagsa","Elbert","Sales All Employees","MINDANAO","Technical Sales Representative"],
+    ["Dagum","Jerby","Credit and Collection","Makati","Credit and Collection Specialist"],
+    ["De La Cruz","Cris-ann","Credit and Collection","CEBU","Credit and Collection Manager"],
+    ["Olasiman","Emily","Formulation","CEBU","Formulation and Quality Manager"],
+    ["Estrada","Erickson","Credit and Collection","GENERAL SANTOS","Collector/Messenger"],
+    ["Felonia","Romel","Credit and Collection","BULACAN","Collector/Messenger"],
+    ["Flores","Rona Cristy","Customer Service Department","BUKIDNON PLANT","Customer Service Specialist"],
+    ["Gabio","Jessie","Sales All Employees","BACOLOD","Technical Sales Representative"],
+    ["Gasingan","Ma Lynie","Sales All Employees","LUZON","District Sales Manager - Pet Food"],
+    ["Garin","Alan","Production Direct Labor","BULACAN","Basemix"],
+    ["Gatchalian","Jefrey","Sales All Employees","LUZON","District Sales Manager"],
+    ["Guillaume","Mathieu Francis Marie","Corporate Management","VISAYAS","President & CEO"],
+    ["Jose","Arbien John","Logistics","BULACAN","SAP/Logistics Coordinator"],
+    ["Labaguis","Mark Joseph","Warehouse","BULACAN","Warehouse Checker"],
+    ["Libutan","Parlo","Purchasing","BULACAN","Purchasing Specialist - Spare Parts"],
+    ["Lubas","Israel","Logistics","HOREB Cebu","Logistics Coordinator"],
+    ["Lustre","Genesis Jane","Quality Assurance","BUKIDNON PLANT","Quality Assurance Supervisor"],
+    ["Macasaet","Ken","Sales All Employees","VISAYAS","District Sales Manager"],
+    ["Madelo","Dennemor","Credit and Collection","BUKIDNON PLANT","Billing Associate"],
+    ["Mamauag","Renelle Vann","Sales All Employees","MINDANAO","District Sales Manager"],
+    ["Mansueto","Kieth","Quality Assurance","CCPC","Quality Assurance Inspector"],
+    ["Miranda","James","Quality Assurance","BUKIDNON PLANT","Quality Assurance Inspector"],
+    ["Nohe","Yoann","Supply Chain Management","CEBU","Supply Chain Manager"],
+    ["Oliva","Windel","Sales All Employees","VISAYAS","District Sales Manager"],
+    ["Ordeniza","Joseph","Production Direct Labor","BUKIDNON PLANT","Pellet Mill Operator"],
+    ["Pagdanganan","Jenny Lyn","Purchasing","BULACAN","Senior Buyer - Local"],
+    ["Painandos","Juvylo","Sales All Employees","MINDANAO","District Sales Manager"],
+    ["Peralta","Carlo","Quality Assurance","BULACAN","Quality Assurance Staff"],
+    ["Perlas","Noel","Production Direct Labor","BULACAN","Pellet Mill Operator"],
+    ["Bernados","Jessah Mae","Controlling Department","CEBU","General Accountant"],
+    ["Quider","Gregie","Production Direct Labor","CCPC","Production Staff"],
+    ["Quijano","Grexon","Production Direct Labor","CCPC","RM Batcher"],
+    ["Ragaas","Christina","Customer Service Department","BULACAN","Customer Service Specialist"],
+    ["Ramos","Khenvic Vhicoy","Production Indirect Labor","BULACAN","Production Coordinator"],
+    ["Beduya","Rachel Mae","Purchasing","CEBU","Purchasing Manager"],
+    ["Rivera","Ivy Joy","Quality Assurance","BULACAN","Quality Assurance Supervisor"],
+    ["Romelard","Christophe","Corporate Management","VISAYAS","Group Finance Officer"],
+    ["Rosario","Marvin","Production Management","CEBU","Operations Manager"],
+    ["Salmorin","Joseph","Logistics","BULACAN","Truck Driver"],
+    ["Saluta","Romel","Logistics","BUKIDNON PLANT","Pier Coordinator"],
+    ["Saranillo","Ronyl","Customer Service Department","HOREB Cebu","CSD / Logistics Regional Supervisor"],
+    ["Silvestre","Jerone","Maintenance","BULACAN","Production and Maintenance Supervisor"],
+    ["Taban-ud","Richard","Sales All Employees","VISAYAS","Poultry Veterinarian & Technical Head"],
+    ["Torre","Jan Michael","Sales All Employees","VISAYAS","District Sales Manager"],
+    ["Bacalla","Lian","Customer Service Department","BULACAN","Customer Service Manager"],
+    ["Vergara","Bernie","Sales All Employees","VISAYAS","Technical Sales Representative"],
+    ["Villaflor","Cheralyn","Customer Service Department","BUKIDNON PLANT","Regional Supervisor-CS and Logistics"],
+    ["Zafra","Pauline Joy","Customer Service Department","BULACAN","Customer Service Specialist"],
+    ["Cosico","Angelica","Marketing","CEBU","Junior Marketing Manager"],
+    ["Durano Jr.","Dominador","Sales Admin","CEBU","Executive Vice President"],
+    ["Guerrero","Aileen","Marketing","BULACAN","Marketing Manager"],
+    ["Lacson","Kenneth","Production Management","BULACAN","Regional Plant Manager"],
+    ["Acar","Erwin Rico","Production Management","HOREB Cebu","Plant Manager"],
+    ["Blancaflor","Ramil","Internal Audit","CEBU","Internal Audit Manager"],
+    ["Gutierrez Jr.","Ervin","Safety","BULACAN","HSE Supervisor – Luzon"],
+    ["Sarmiento","Maria Generva","Warehouse","BULACAN","SAP Logistics Coordinator"],
+    ["Salas","Nhica","Warehouse","BULACAN","Warehouse Supervisor"],
+    ["Gutierrez","Julius Alexander","Warehouse","BUKIDNON PLANT","Warehouse Supervisor"],
+    ["Alamo","Rejean","Warehouse","BUKIDNON PLANT","RM Team Leader"],
+    ["Salvador","Sheena Marie","Warehouse","AC Extension - New Warehouse","Inventory Analyst"],
+    ["Bacaltos","Manuelito","Information Technology","CEBU","System Developer"]
+];
+
+// =========================================================
+// APPROVING MANAGERS (mapped by Department keyword)
+// =========================================================
+const MANAGERS = [
+    { name: "Christophe Romelard", role: "Group Finance Officer", email: "christophe@vienovo.ph",
+      depts: ["Corporate Management","Controlling","Treasury","Finance"] },
+    { name: "Reggie Dabu", role: "IT Manager", email: "reggie.dabu@vienovo.ph",
+      depts: ["Information Technology","IT"] },
+    { name: "Cris-ann De La Cruz", role: "Credit and Collection Manager", email: "crisann.delacruz@vienovo.ph",
+      depts: ["Credit and Collection"] },
+    { name: "Rachel Mae Beduya", role: "Purchasing Manager", email: "rachel.beduya@vienovo.ph",
+      depts: ["Purchasing"] },
+    { name: "Yoann Nohe", role: "Supply Chain Manager", email: "yoann.nohe@vienovo.ph",
+      depts: ["Supply Chain","Logistics","Warehouse"] },
+    { name: "Marvin Rosario", role: "Operations Manager", email: "marvin.rosario@vienovo.ph",
+      depts: ["Production Management","Production Direct","Production Indirect","Maintenance"] },
+    { name: "Emily Olasiman", role: "Formulation and Quality Manager", email: "emily.olasiman@vienovo.ph",
+      depts: ["Quality Assurance","Formulation"] },
+    { name: "Lian Bacalla", role: "Customer Service Manager", email: "lian.bacalla@vienovo.ph",
+      depts: ["Customer Service"] },
+    { name: "Aileen Guerrero", role: "Marketing Manager", email: "aileen.guerrero@vienovo.ph",
+      depts: ["Marketing"] },
+    { name: "Dominador Durano Jr.", role: "EVP - Sales", role2:"", email: "dom.durano@vienovo.ph",
+      depts: ["Sales","Sales Admin"] },
+    { name: "Ramil Blancaflor", role: "Internal Audit Manager", email: "ramil.blancaflor@vienovo.ph",
+      depts: ["Internal Audit","Regulatory","Safety","Human Resources","Administrative"] }
+];
+
+// =========================================================
+// MATERIAL CATEGORIES (placeholder until OITM integration)
+// =========================================================
+const MATERIALS = {
+    "Raw Material": ["Corn Grits","Soybean Meal","Wheat Bran","Rice Bran","Limestone","Fish Meal","Vitamin Premix"],
+    "Packaging": ["Polypropylene Sack 50kg","PP Sack 25kg","Plastic Liner","Stitching Thread","Pallet Wrap"],
+    "Spare Parts": ["Pellet Die","Roller Shell","Conveyor Belt","Bearing 6205","V-Belt B-Series","Hammer Mill Screen"],
+    "IT Equipment": ["Laptop Battery","Mouse - Wireless","Keyboard","Network Cable Cat6","USB Drive 32GB","Toner Cartridge"],
+    "Office Supplies": ["Bond Paper A4","Ballpen Black","Folder Long","Stapler","Calculator"],
+    "Lab / QA": ["Sample Bag","Pipette Tip","NIR Reference Sample","pH Buffer Solution","Lab Coat"],
+    "Safety / PPE": ["Hard Hat","Safety Shoes","Dust Mask N95","Hi-Vis Vest","Gloves - Cotton","Ear Plug"]
+};
+const UOM_LIST = ["pc","box","kg","bag","liter","meter","roll","set","pack"];
+
+// =========================================================
+// HELPERS
+// =========================================================
+function slugEmail(last, first) {
+    const clean = s => s.toLowerCase().replace(/[^a-z]/g,'');
+    return `${clean(first)}.${clean(last)}@vienovo.ph`;
+}
+function findManager(dept) {
+    if (!dept) return null;
+    return MANAGERS.find(m => m.depts.some(d => dept.toLowerCase().includes(d.toLowerCase())));
+}
+function genRefNumber() {
+    const d = new Date();
+    const ymd = d.getFullYear().toString() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+    const seq = String(Math.floor(Math.random()*9000)+1000);
+    return `GIS-${ymd}-${seq}`;
+}
+
+// =========================================================
+// INIT
+// =========================================================
+document.getElementById('refNumber').innerText = genRefNumber();
+document.getElementById('dateNow').innerText = new Date().toLocaleString('en-PH',{dateStyle:'medium',timeStyle:'short'});
+document.getElementById('dateNeeded').valueAsDate = new Date();
+
+// Populate employees (sorted by last name)
+const empSel = document.getElementById('employeeList');
+EMPLOYEES
+    .map((e,i)=>({i, label:`${e[0]}, ${e[1]} — ${e[2]} (${e[3]})`}))
+    .sort((a,b)=>a.label.localeCompare(b.label))
+    .forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.i;
+        opt.text = o.label;
+        empSel.appendChild(opt);
+    });
+
+// Populate managers
+const mgrSel = document.getElementById('approverList');
+MANAGERS.forEach((m,i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.text = `${m.name} — ${m.role}`;
+    mgrSel.appendChild(opt);
+});
+
+// =========================================================
+// EMPLOYEE SELECT -> auto-fill + auto-route
+// =========================================================
+empSel.addEventListener('change', () => {
+    const e = EMPLOYEES[empSel.value];
+    if (!e) return;
+    document.getElementById('empEmail').value = slugEmail(e[0], e[1]);
+    document.getElementById('empDept').value = e[2];
+    document.getElementById('empLoc').value = e[3];
+
+    const mgr = findManager(e[2]);
+    if (mgr) {
+        const idx = MANAGERS.indexOf(mgr);
+        mgrSel.value = idx;
+        const hint = document.getElementById('routingHint');
+        hint.style.display = 'block';
+        document.getElementById('routingText').innerText =
+            `Auto-routed to ${mgr.name} (${mgr.role}) based on ${e[2]} department.`;
+    }
+});
+
+// =========================================================
+// ITEM ROWS
+// =========================================================
+let rowCounter = 0;
+function addRow() {
+    rowCounter++;
+    const tbody = document.getElementById('itemsBody');
+    const tr = document.createElement('tr');
+    tr.dataset.row = rowCounter;
+    tr.innerHTML = `
+        <td>
+            <select class="form-select form-select-sm item-name" required>
+                <option value="" disabled selected>-- Select Material --</option>
+                ${Object.entries(MATERIALS).map(([cat, items]) =>
+                    `<optgroup label="${cat}">${items.map(i => `<option value="${i}" data-cat="${cat}">${i}</option>`).join('')}</optgroup>`
+                ).join('')}
+                <option value="__custom__">+ Type custom item...</option>
+            </select>
+            <input type="text" class="form-control form-control-sm mt-1 item-custom" placeholder="Custom item name" style="display:none;">
+        </td>
+        <td><input type="text" class="form-control form-control-sm item-cat" readonly></td>
+        <td><input type="number" class="form-control form-control-sm item-qty" min="1" value="1" required></td>
+        <td>
+            <select class="form-select form-select-sm item-uom">
+                ${UOM_LIST.map(u => `<option value="${u}">${u}</option>`).join('')}
+            </select>
+        </td>
+        <td><input type="text" class="form-control form-control-sm item-purpose" placeholder="e.g. Line 2 repair"></td>
+        <td class="no-print text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-del-row"><i class="bi bi-x"></i></button>
+        </td>
+    `;
+    tbody.appendChild(tr);
+
+    // wiring
+    const sel = tr.querySelector('.item-name');
+    const customInput = tr.querySelector('.item-custom');
+    const catInput = tr.querySelector('.item-cat');
+    sel.addEventListener('change', () => {
+        if (sel.value === '__custom__') {
+            customInput.style.display = 'block';
+            catInput.value = 'Custom';
+        } else {
+            customInput.style.display = 'none';
+            const opt = sel.options[sel.selectedIndex];
+            catInput.value = opt.dataset.cat || '';
+        }
+    });
+    tr.querySelector('.btn-del-row').addEventListener('click', () => {
+        if (document.querySelectorAll('#itemsBody tr').length > 1) tr.remove();
+    });
+}
+addRow();
+document.getElementById('btnAddRow').addEventListener('click', addRow);
+
+// =========================================================
+// COLLECT FORM DATA
+// =========================================================
+function collectData() {
+    const e = EMPLOYEES[empSel.value] || ["","","","",""];
+    const m = MANAGERS[mgrSel.value] || {name:"",email:"",role:""};
+    const items = Array.from(document.querySelectorAll('#itemsBody tr')).map(tr => {
+        let name = tr.querySelector('.item-name').value;
+        if (name === '__custom__') name = tr.querySelector('.item-custom').value || '(unnamed)';
+        return {
+            name,
+            category: tr.querySelector('.item-cat').value,
+            qty: tr.querySelector('.item-qty').value,
+            uom: tr.querySelector('.item-uom').value,
+            purpose: tr.querySelector('.item-purpose').value
+        };
+    });
+    return {
+        ref: document.getElementById('refNumber').innerText,
+        date_submitted: new Date().toLocaleString('en-PH'),
+        date_needed: document.getElementById('dateNeeded').value,
+        employee_name: `${e[1]} ${e[0]}`,
+        employee_email: document.getElementById('empEmail').value,
+        department: e[2], location: e[3], position: e[4],
+        approver_name: m.name, approver_email: m.email, approver_role: m.role,
+        cc: document.getElementById('ccEmail').value,
+        items,
+        justification: document.getElementById('explanation').value
+    };
+}
+
+function buildEmailBody(d) {
+    const itemsTxt = d.items.map((it,i) =>
+        `  ${i+1}. ${it.name}  —  ${it.qty} ${it.uom}  [${it.category||'-'}]  ${it.purpose?'(' + it.purpose + ')':''}`
+    ).join('\n');
+    return `Hi ${d.approver_name.split(' ')[0]},
+
+A new Goods Issuance request requires your approval.
+
+------------------------------------------------------------
+  Reference No.   : ${d.ref}
+  Date Submitted  : ${d.date_submitted}
+  Date Needed     : ${d.date_needed}
+------------------------------------------------------------
+  Requestor       : ${d.employee_name}
+  Position        : ${d.position}
+  Department      : ${d.department}
+  Plant/Location  : ${d.location}
+  Email           : ${d.employee_email}
+------------------------------------------------------------
+  Items Requested:
+${itemsTxt}
+------------------------------------------------------------
+  Justification:
+  ${d.justification}
+------------------------------------------------------------
+
+Please review and APPROVE / DECLINE this request in the Vienovo Goods Issuance portal.
+
+Thank you,
+Vienovo Goods Issuance System (automated)`;
+}
+
+// =========================================================
+// PREVIEW
+// =========================================================
+document.getElementById('btnPreview').addEventListener('click', () => {
+    const d = collectData();
+    document.getElementById('pv-to').innerText = `${d.approver_name} <${d.approver_email}>`;
+    document.getElementById('pv-cc').innerText = [d.employee_email, d.cc].filter(Boolean).join('; ') || '(none)';
+    document.getElementById('pv-subj').innerText = `[${d.ref}] Goods Issuance Request - ${d.employee_name}`;
+    document.getElementById('pv-body').innerText = buildEmailBody(d);
+    new bootstrap.Modal(document.getElementById('preview-modal')).show();
+});
+
+// =========================================================
+// DRAFT SAVE / LOAD (localStorage)
+// =========================================================
+const DRAFT_KEY = 'vno_gis_draft';
+function showDraftIndicator() {
+    const ind = document.getElementById('draftIndicator');
+    ind.style.display = 'block';
+    setTimeout(()=>ind.style.display='none', 1800);
+}
+document.getElementById('btnSaveDraft').addEventListener('click', () => {
+    try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(collectData()));
+        showDraftIndicator();
+    } catch(e){ alert('Draft save failed: ' + e.message); }
+});
+
+// =========================================================
+// CLEAR
+// =========================================================
+document.getElementById('btnClear').addEventListener('click', () => {
+    if (!confirm('Clear all fields?')) return;
+    document.getElementById('gisForm').reset();
+    document.getElementById('itemsBody').innerHTML = '';
+    addRow();
+    document.getElementById('refNumber').innerText = genRefNumber();
+    document.getElementById('routingHint').style.display = 'none';
+});
+
+// =========================================================
+// SUBMIT (simulated email send)
+// =========================================================
+document.getElementById('gisForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+
+    const d = collectData();
+    console.log('GIS Payload:', d);
+    console.log('Email Body:\n' + buildEmailBody(d));
+
+    // === When EmailJS is configured, uncomment: ===
+    // emailjs.send('SERVICE_ID', 'TEMPLATE_ID', {
+    //     to_email: d.approver_email,
+    //     cc_email: d.employee_email,
+    //     subject: `[${d.ref}] Goods Issuance Request - ${d.employee_name}`,
+    //     message: buildEmailBody(d)
+    // }).then(...);
+
+    setTimeout(() => {
+        // advance workflow visual
+        document.getElementById('wf-1').classList.remove('active');
+        document.getElementById('wf-1').classList.add('done');
+        document.getElementById('wf-2').classList.add('active');
+
+        const s = document.getElementById('statusMsg');
+        s.style.display = 'block';
+        s.innerHTML = `
+            <div class="alert alert-success">
+                <h6 class="mb-1"><i class="bi bi-check-circle"></i> Request submitted successfully!</h6>
+                <p class="mb-1 small">Reference <strong>${d.ref}</strong> has been routed to <strong>${d.approver_name}</strong> (${d.approver_email}) for approval.</p>
+                <p class="mb-0 small">Cc: ${d.employee_email}${d.cc?'; ' + d.cc:''}</p>
+            </div>`;
+        btn.innerHTML = '<i class="bi bi-check2"></i> Sent — Submit Another';
+        btn.disabled = false;
+    }, 1500);
+});
+</script>
+</body>
+</html>
